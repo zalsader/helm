@@ -17,12 +17,14 @@ limitations under the License.
 package main // import "helm.sh/helm/v3/cmd/helm"
 
 import (
+	"C"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
 
+	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
@@ -89,6 +91,52 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+//export helmCmd
+func helmCmd(args *C.char) int {
+	// Setting the name of the app for managedFields in the Kubernetes client.
+	// It is set here to the full name of "helm" so that renaming of helm to
+	// another name (e.g., helm2 or helm3) does not change the name of the
+	// manager as picked up by the automated name detection.
+	kube.ManagedFieldsManager = "helm"
+
+	actionConfig := new(action.Configuration)
+
+	splitArgs, err := shellquote.Split(C.GoString(args))
+	if err != nil {
+		warning("%+v", err)
+		return 1
+	}
+
+	cmd, err := newRootCmd(actionConfig, os.Stdout, splitArgs[1:])
+	if err != nil {
+		warning("%+v", err)
+		return 1
+	}
+
+	// run when each command's execute method is called
+	cobra.OnInitialize(func() {
+		helmDriver := os.Getenv("HELM_DRIVER")
+		if err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), helmDriver, debug); err != nil {
+			log.Fatal(err)
+		}
+		if helmDriver == "memory" {
+			loadReleasesInMemory(actionConfig)
+		}
+	})
+
+	if err := cmd.Execute(); err != nil {
+		debug("%+v", err)
+		switch e := err.(type) {
+		case pluginError:
+			return e.code
+		default:
+			return 1
+		}
+	}
+
+	return 0
 }
 
 // This function loads releases into the memory storage if the
