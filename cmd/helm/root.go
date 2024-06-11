@@ -207,6 +207,9 @@ func newRootCmd(actionConfig *action.Configuration, out io.Writer, args []string
 	// Check for expired repositories
 	checkForExpiredRepos(settings.RepositoryConfig)
 
+	cmd.SetArgs(args)
+	cmd.SetOut(out)
+
 	return cmd, nil
 }
 
