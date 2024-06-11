@@ -16,13 +16,17 @@ limitations under the License.
 
 package main // import "helm.sh/helm/v3/cmd/helm"
 
+//#include <stdlib.h>
+import "C"
+
 import (
-	"C"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
+	"unsafe"
 
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
@@ -94,7 +98,7 @@ func main() {
 }
 
 //export helmCmd
-func helmCmd(args *C.char) int {
+func helmCmd(args *C.char) (int, *C.char) {
 	// Setting the name of the app for managedFields in the Kubernetes client.
 	// It is set here to the full name of "helm" so that renaming of helm to
 	// another name (e.g., helm2 or helm3) does not change the name of the
@@ -103,16 +107,22 @@ func helmCmd(args *C.char) int {
 
 	actionConfig := new(action.Configuration)
 
+	buf := new(bytes.Buffer)
+	var cstr *C.char
+	defer C.free(unsafe.Pointer(cstr))
+
 	splitArgs, err := shellquote.Split(C.GoString(args))
 	if err != nil {
 		warning("%+v", err)
-		return 1
+		cstr = C.CString(buf.String())
+		return 1, cstr
 	}
 
-	cmd, err := newRootCmd(actionConfig, os.Stdout, splitArgs[1:])
+	cmd, err := newRootCmd(actionConfig, buf, splitArgs[1:])
 	if err != nil {
 		warning("%+v", err)
-		return 1
+		cstr = C.CString(buf.String())
+		return 1, cstr
 	}
 
 	// run when each command's execute method is called
@@ -128,15 +138,17 @@ func helmCmd(args *C.char) int {
 
 	if err := cmd.Execute(); err != nil {
 		debug("%+v", err)
+		cstr = C.CString(buf.String())
 		switch e := err.(type) {
 		case pluginError:
-			return e.code
+			return e.code, cstr
 		default:
-			return 1
+			return 1, cstr
 		}
 	}
 
-	return 0
+	cstr = C.CString(buf.String())
+	return 0, cstr
 }
 
 // This function loads releases into the memory storage if the
