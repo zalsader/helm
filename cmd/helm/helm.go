@@ -105,7 +105,7 @@ func helmCmd(filename, args *C.char) int {
 
 	actionConfig := new(action.Configuration)
 
-	out, err := os.Open(C.GoString(filename))
+	out, err := os.OpenFile(C.GoString(filename), os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
 		warning("%+v", err)
 		return 1
