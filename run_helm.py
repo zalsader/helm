@@ -7,5 +7,5 @@ helm = ctypes.cdll.LoadLibrary('./bin/helm.so')
 helmCmd = helm.helmCmd
 helmCmd.argtypes = [ctypes.c_char_p]
 helmCmd.restype = HelmCmdReturnType
-ret = helmCmd(b"helm list")
+ret = helmCmd(b"helm list -n kyverno")
 print(ret.r1.decode())
