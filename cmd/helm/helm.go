@@ -20,13 +20,11 @@ package main // import "helm.sh/helm/v3/cmd/helm"
 import "C"
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
-	"unsafe"
 
 	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
@@ -98,7 +96,7 @@ func main() {
 }
 
 //export helmCmd
-func helmCmd(args *C.char) (int, *C.char) {
+func helmCmd(filename, args *C.char) int {
 	// Setting the name of the app for managedFields in the Kubernetes client.
 	// It is set here to the full name of "helm" so that renaming of helm to
 	// another name (e.g., helm2 or helm3) does not change the name of the
@@ -107,22 +105,22 @@ func helmCmd(args *C.char) (int, *C.char) {
 
 	actionConfig := new(action.Configuration)
 
-	buf := new(bytes.Buffer)
-	var cstr *C.char
-	defer C.free(unsafe.Pointer(cstr))
+	out, err := os.Open(C.GoString(filename))
+	if err != nil {
+		warning("%+v", err)
+		return 1
+	}
 
 	splitArgs, err := shellquote.Split(C.GoString(args))
 	if err != nil {
 		warning("%+v", err)
-		cstr = C.CString(buf.String())
-		return 1, cstr
+		return 1
 	}
 
-	cmd, err := newRootCmd(actionConfig, buf, splitArgs[1:])
+	cmd, err := newRootCmd(actionConfig, out, splitArgs[1:])
 	if err != nil {
 		warning("%+v", err)
-		cstr = C.CString(buf.String())
-		return 1, cstr
+		return 1
 	}
 
 	// run when each command's execute method is called
@@ -138,17 +136,15 @@ func helmCmd(args *C.char) (int, *C.char) {
 
 	if err := cmd.Execute(); err != nil {
 		debug("%+v", err)
-		cstr = C.CString(buf.String())
 		switch e := err.(type) {
 		case pluginError:
-			return e.code, cstr
+			return e.code
 		default:
-			return 1, cstr
+			return 1
 		}
 	}
 
-	cstr = C.CString(buf.String())
-	return 0, cstr
+	return 0
 }
 
 // This function loads releases into the memory storage if the
